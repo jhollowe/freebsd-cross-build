@@ -1,6 +1,6 @@
 # The version of Alpine to use in the Docker image.
 ARG ALPINE_VERSION=3.12
-FROM alpine:$ALPINE_VERSION AS compile
+FROM alpine:$ALPINE_VERSION AS enviro
 
 # Lots of cross-compiler guides include instructions for compiling MPC, MPFR,
 # and GMP. Don't: these are dependencies required for compiling GCC itself, and
@@ -10,7 +10,7 @@ FROM alpine:$ALPINE_VERSION AS compile
 RUN apk add --no-cache file make gcc musl-dev gmp-dev mpc1-dev mpfr-dev
 
 # what version will this image (tag) cross-compile for?
-ARG FBSD_VERSION=9.3
+ARG FBSD_VERSION=10.0
 ARG FBSD_ARCH=amd64
 ARG GCC_VERSION=4.2.4
 ARG BINUTILS_VERSION=2.19.1a
@@ -31,12 +31,13 @@ ARG GCC_URL=${GNU_MIRROR}/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.bz2
 # versions above 2.19.1 are uncharted territory with GCC 4.2.
 ARG BINUTILS_URL=${GNU_MIRROR}/binutils/binutils-${BINUTILS_VERSION}.tar.bz2
 
-ARG MAKEFLAGS="-j 4"
+ARG MAKEFLAGS="-j 1"
 
 ADD $FBSD_BASE_URL /usr/local/src/fbsd-base.txz
 ADD $GCC_URL $BINUTILS_URL /usr/local/src/
 COPY compile .
 
+FROM enviro AS compile
 RUN export FBSD_MAJOR=$(echo $FBSD_VERSION | cut -d '.' -f 1) \
     && /usr/local/src/build-cross ${FBSD_ARCH}-freebsd$FBSD_MAJOR \
                                   /usr/local/src/fbsd-base.txz

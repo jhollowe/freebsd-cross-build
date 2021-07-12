@@ -58,3 +58,14 @@ BUILD_ARGS := $(addprefix --build-arg ,$(ALPINE_VERSION_ARG) \
 
 freebsd-cross-build:
 	docker build --tag freebsd-cross-build:$(FBSD_VERSION) $(BUILD_ARGS) .
+
+# display the raw output of all the build steps
+show-all:
+	echo "Outer make is using MAKEFLAGS $(MAKEFLAGS_ARG)"
+	docker build --progress plain --tag freebsd-cross-build:$(FBSD_VERSION) $(BUILD_ARGS) .
+
+stage-enviro:
+	docker build --progress plain --tag freebsd-cross-build:$(FBSD_VERSION)-enviro --target enviro $(BUILD_ARGS) .
+
+stage-compile:
+	docker build --progress plain --tag freebsd-cross-build:$(FBSD_VERSION)-compile --target compile $(BUILD_ARGS) .

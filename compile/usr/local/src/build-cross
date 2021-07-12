@@ -28,38 +28,47 @@ fi
 HOST="$1"
 FBSD_BASE_ARCHIVE="$2"
 
-mkdir -p /usr/local/"$HOST"
-tar -C /usr/local/"$HOST" \
-    -xf "$FBSD_BASE_ARCHIVE" \
-    ./usr/include \
-    ./usr/lib \
-    ./lib
+echo "Script Using MAKEFLAGS $MAKEFLAGS"
 
-# Move everything out of /usr into the root so it matches the usual
-# cross-compiler headers/library structure, but save /usr itself: we need it to
-# build GCC.
-mv /usr/local/"$HOST"/usr/include \
-   /usr/local/"$HOST"
-mv /usr/local/"$HOST"/usr/lib/* \
-   /usr/local/"$HOST"/lib
-rmdir /usr/local/"$HOST"/usr/lib
+if [ -d "/usr/local/$HOST" ]; then
+    echo "/usr/local/$HOST already exists"
+else
+    mkdir -p /usr/local/"$HOST"
+    tar -C /usr/local/"$HOST" \
+        -xf "$FBSD_BASE_ARCHIVE" \
+        ./usr/include \
+        ./usr/lib \
+        ./lib
+
+    # Move everything out of /usr into the root so it matches the usual
+    # cross-compiler headers/library structure, but save /usr itself: we need it to
+    # build GCC.
+    mv /usr/local/"$HOST"/usr/include \
+    /usr/local/"$HOST"
+    mv /usr/local/"$HOST"/usr/lib/* \
+    /usr/local/"$HOST"/lib
+    rmdir /usr/local/"$HOST"/usr/lib
+fi
 
 # The FreeBSD base install has a number of symlinks in /usr/lib pointing
 # absolutely to /lib. Their targets are now actually in /usr/local/$HOST, so
 # the links are broken. Because we've folded /usr/lib and /lib into the same
 # directory, the easy fix is to relink all broken symlinks to the base name of
 # their original targets.
-find -L /usr/local/"$HOST"/lib -type l | while read -r broken_link
-do
-    target="$(basename "$(readlink "$broken_link")")"
-    rm "$broken_link"
-    ln -s "$target" "$broken_link"
-done
+if [ -d "/usr/local/$HOST" ]; then
+    find -L /usr/local/"$HOST"/lib -type l | while read -r broken_link
+    do
+        target="$(basename "$(readlink "$broken_link")")"
+        rm "$broken_link"
+        ln -s "$target" "$broken_link"
+    done
+fi
 
 # Clean up any existing source for a package, unpack the source archive, and
 # move into the unpacked directory.
 stage ()
 {
+    echo "preparing files of $1"
     rm -Rf /usr/local/src/"$1"-*/
     tar -C /usr/local/src -xf /usr/local/src/"$1"-*.t* \
         || die "couldn't extract $1 source archive"
@@ -70,25 +79,26 @@ stage ()
 # Get rid of a source tree we just unpacked and compiled from.
 strike ()
 {
+    echo "cleaning up after $1"
     cd /usr/local/src || die "couldn't get out of the source tree"
     rm -Rf /usr/local/src/"$1"-*/
 }
 
-stage binutils
-# Compilation of the gold linker from binutils 2.19.1a fails under GCC 8.3.0,
-# so we only enable plain ol' ld.
-#
-# Newer GCC versions have stricter error checking, so -Werror (which binutils
-# enables by default) causes the build to fail due to perfectly valid code
-# quality concerns over which we have no control.
-./configure --target="$HOST" \
-            --enable-libssp \
-            --enable-ld \
-            --disable-werror \
-            --with-sysroot=/usr/local/"$HOST"
-make
-make install
-strike binutils
+# stage binutils
+# # Compilation of the gold linker from binutils 2.19.1a fails under GCC 8.3.0,
+# # so we only enable plain ol' ld.
+# #
+# # Newer GCC versions have stricter error checking, so -Werror (which binutils
+# # enables by default) causes the build to fail due to perfectly valid code
+# # quality concerns over which we have no control.
+# ./configure --target="$HOST" \
+#             --enable-libssp \
+#             --enable-ld \
+#             --disable-werror \
+#             --with-sysroot=/usr/local/"$HOST"
+# make
+# make install
+# strike binutils
 
 stage gcc
 mkdir build
@@ -125,19 +135,19 @@ export MAKEINFO=missing
              --with-build-time-tools=/usr/local/bin
 make
 make install
-strike gcc
 # We're done with the /include → /usr/include symlink now.
 rm /usr/local/"$HOST"/usr/include
-rmdir /usr/local/"$HOST"/usr
+# strike gcc
+# rmdir /usr/local/"$HOST"/usr
 
-# The GCC installation process copies some binaries (ar, as, c++, g++, gcc, ld,
-# nm, objcopy, objdump, and strip) into /$PREFIX/$HOST/bin as well as
-# /$PREFIX/bin. These copies take up an extra ~45MB. The polite thing to do is
-# to replace them with symlinks. (That's how regular Debian cross-compilers are
-# packaged, too.)
-for duplicate_bin in /usr/local/"$HOST"/bin/*
-do
-    target=/usr/local/bin/"$HOST"-"$(basename "$duplicate_bin")"
-    rm "$duplicate_bin"
-    ln -s "$target" "$duplicate_bin"
-done
+# # The GCC installation process copies some binaries (ar, as, c++, g++, gcc, ld,
+# # nm, objcopy, objdump, and strip) into /$PREFIX/$HOST/bin as well as
+# # /$PREFIX/bin. These copies take up an extra ~45MB. The polite thing to do is
+# # to replace them with symlinks. (That's how regular Debian cross-compilers are
+# # packaged, too.)
+# for duplicate_bin in /usr/local/"$HOST"/bin/*
+# do
+#     target=/usr/local/bin/"$HOST"-"$(basename "$duplicate_bin")"
+#     rm "$duplicate_bin"
+#     ln -s "$target" "$duplicate_bin"
+# done
